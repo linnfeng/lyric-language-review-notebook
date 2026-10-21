@@ -1,0 +1,7 @@
+site_name: AI LRC Generator Review Reference
+site_description: A project-associated reference for human review of synchronized lyric drafts.
+docs_dir: docs
+site_dir: site
+theme: readthedocs
+nav:
+  - Review reference: index.md
