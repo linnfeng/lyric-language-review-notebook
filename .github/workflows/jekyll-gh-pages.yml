@@ -1,0 +1,61 @@
+name: Publish lyric review documentation
+'on':
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: lyric-review-pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: Verify and prepare complete documentation
+        shell: bash
+        run: |
+          python3 - <<'PYDOC'
+          from pathlib import Path
+          import hashlib
+
+          raw = Path('README.md').read_bytes()
+          expected_sha = '697e29e19f0117efb23614f04c3304d924af78d3c18d3a2c4cb656a11d519a7c'
+          if hashlib.sha256(raw).hexdigest() != expected_sha:
+              raise SystemExit('Complete original README changed; stop before publication')
+          source = raw.decode('utf-8')
+          target = 'https://ailrcgenerator.online/'
+          if '[lrc maker online](' + target + ')' not in source:
+              raise SystemExit('Expected original documentation reference missing')
+          site = Path('pages-source')
+          (site / '_layouts').mkdir(parents=True, exist_ok=True)
+          (site / '_layouts/default.html').write_text('''<!doctype html>
+          <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ page.title | escape }}</title><style>body{font:18px/1.7 system-ui,sans-serif;background:#f5f8fa;color:#203849;margin:0}main{max-width:940px;margin:auto;padding:36px 22px 70px}img{max-width:100%;height:auto}a{color:#126183}h1,h2{line-height:1.3}h2{margin-top:2em}table{border-collapse:collapse;width:100%;font-size:.9em}td,th{border:1px solid #aac2ca;padding:9px;vertical-align:top}@media(max-width:600px){main{padding:24px 14px}table{display:block;overflow:auto}}</style></head><body><main>{{ content }}</main></body></html>
+          ''', encoding='utf-8')
+          (site / '_config.yml').write_text('markdown: kramdown\nkramdown:\n  input: GFM\n', encoding='utf-8')
+          APPENDIX_PLACEHOLDER = '\n\n## Appendix: use the notebook as a private review record\n\nThe blank tables above are starting points, not evidence that any export has passed. Copy the review structure into a private working document and replace a status only after making the relevant observation. A helpful entry names the file version, the playback surface and the part of the recording that was checked. If the result is unclear, keep that uncertainty visible and describe the next check. Do not convert a row from not recorded to complete simply because an earlier row looked reasonable or because the file downloaded without an error.\n\nSeparate a character-preservation check from a font or layout observation. The stored text can remain unchanged while a display uses an unsuitable font, and two strings can look similar while containing different character sequences. A visual review and a source comparison answer different questions. Record which one was performed instead of claiming that a screenshot establishes both. When a collaborator reports a problem, ask for a small original example and the actual destination environment; a broad statement that a language is broken is difficult to investigate and may hide a more specific conversion or display issue.\n\nKeep private information out of public feedback. A useful report can identify an invented phrase, a non-sensitive timing pattern and the software involved without attaching the full recording or exposing an access link. If the material cannot be shared, say so and describe the limitation. A reviewer may still help decide what to inspect next, but they should not be described as having verified a file they could not see. Storage, permission and distribution decisions remain the responsibility of the people handling the project rather than a result certified by this notebook.\n\nWhen a revision is ready, retain an editable source and label the delivery clearly. Explain whether a change affected wording, line grouping, timing or export format, then repeat the checks connected to that change. Avoid resetting every observation to success after one correction. This documentation page is a static reading resource: it does not upload audio, recognize lyrics, translate text, store review results or run compatibility tests. The linked browser tool has its own current processing requirements and terms. Treat the notebook and the tool as different parts of a workflow with different evidence boundaries.\n'
+          appendix = APPENDIX_PLACEHOLDER
+          (site / 'index.md').write_text('---\nlayout: default\ntitle: Multilingual lyric review notebook\n---\n\n' + source + appendix, encoding='utf-8')
+          print('Verified entire original README and prepared documentation; source file unchanged')
+          PYDOC
+      - uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./pages-source
+          destination: ./_site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./_site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy documentation to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
